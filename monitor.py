@@ -2,11 +2,13 @@ import os
 import feedparser
 import requests
 import json
+from datetime import datetime
 
 TELEGRAM_BOT_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
 TELEGRAM_CHAT_ID = os.environ['TELEGRAM_CHAT_ID']
 
 STATE_FILE = 'last_seen.json'
+FEED_FILE = 'url_list.txt'
 
 def load_last_seen():
     if os.path.exists(STATE_FILE):
@@ -14,37 +16,51 @@ def load_last_seen():
             return json.load(f)
     return {}
 
-def save_last_seen(state):
+def save_last_seen(data):
     with open(STATE_FILE, 'w') as f:
-        json.dump(state, f)
+        json.dump(data, f)
 
-def send_telegram_message(message):
+def send_telegram_message(title, link, source):
+    timestamp = datetime.now().strftime("%d %b %Y • %I:%M %p")
+    message = f"""
+📢 *{source.upper()} Update*  
+📰 *{title}*  
+🔗 [View Full Post]({link})  
+🕒 {timestamp}
+"""
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {'chat_id': TELEGRAM_CHAT_ID, 'text': message, 'disable_web_page_preview': True}
+    payload = {
+        'chat_id': TELEGRAM_CHAT_ID,
+        'text': message,
+        'parse_mode': 'Markdown',
+        'disable_web_page_preview': True
+    }
     requests.post(url, data=payload)
 
-def fetch_latest_entry_title(url):
+def fetch_latest_entries(url, last_seen):
     feed = feedparser.parse(url)
-    if feed.entries:
-        entry = feed.entries[0]
-        return entry.title, entry.link
-    return None, None
+    source = url.split('/')[2]
+
+    if not feed.entries:
+        return
+
+    latest_title = feed.entries[0].title
+    latest_link = feed.entries[0].link
+
+    if last_seen.get(url) != latest_title:
+        send_telegram_message(latest_title, latest_link, source)
+        last_seen[url] = latest_title
 
 def main():
-    state = load_last_seen()
+    last_seen = load_last_seen()
 
-    with open('url_list.txt') as f:
-        urls = f.read().splitlines()
-
-    updated_state = {}
+    with open(FEED_FILE, 'r') as f:
+        urls = [line.strip() for line in f if line.strip()]
 
     for url in urls:
-        title, link = fetch_latest_entry_title(url)
-        if title and (url not in state or state[url] != title):
-            send_telegram_message(f"🆕 New post from {url}:\n{title}\n{link}")
-        updated_state[url] = title
+        fetch_latest_entries(url, last_seen)
 
-    save_last_seen(updated_state)
+    save_last_seen(last_seen)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
