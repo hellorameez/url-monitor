@@ -1,85 +1,49 @@
-
+import feedparser
+import hashlib
 import os
 import requests
-from bs4 import BeautifulSoup
 
-URLS = [
-    "https://www.beebom.com/",
-    "https://gadgets360.com/news",
-    "https://www.theverge.com/tech",
-    "https://techcrunch.com/",
-    "https://www.androidauthority.com/",
-    "https://9to5google.com/",
-    "https://www.macrumors.com/",
-    "https://www.gsmarena.com/"
-]
+TELEGRAM_BOT_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
+TELEGRAM_CHAT_ID = os.environ['TELEGRAM_CHAT_ID']
 
-BOT_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
-CHAT_ID = os.environ['TELEGRAM_CHAT_ID']
-STATE_FILE = "prev_links.txt"
-
-def send_telegram(msg):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    data = {'chat_id': CHAT_ID, 'text': msg}
-    requests.post(url, data=data)
-
-def get_latest_link(site_url):
-    try:
-        res = requests.get(site_url, timeout=10)
-        soup = BeautifulSoup(res.text, 'html.parser')
-
-        if "beebom" in site_url:
-            article = soup.select_one("article a")
-        elif "gadgets360" in site_url:
-            article = soup.select_one(".story_list a")
-        elif "theverge" in site_url:
-            article = soup.select_one("h2 a")
-        elif "techcrunch" in site_url:
-            article = soup.select_one("a.post-block__title__link")
-        elif "androidauthority" in site_url:
-            article = soup.select_one("article h3 a")
-        elif "9to5google" in site_url:
-            article = soup.select_one("article header h2 a")
-        elif "macrumors" in site_url:
-            article = soup.select_one("div.article h2 a")
-        elif "gsmarena" in site_url:
-            article = soup.select_one("div.news-item a")
-        else:
-            return None
-
-        if article and article.get("href"):
-            link = article["href"]
-            if not link.startswith("http"):
-                link = site_url.rstrip("/") + "/" + link.lstrip("/")
-            return link
-    except Exception as e:
-        print(f"Error fetching from {site_url}: {e}")
+def fetch_latest_entry_title(url):
+    feed = feedparser.parse(url)
+    if feed.entries:
+        return feed.entries[0].title + feed.entries[0].link
     return None
 
-def load_previous():
-    try:
-        with open(STATE_FILE, 'r') as f:
-            return set(line.strip() for line in f)
-    except FileNotFoundError:
-        return set()
+def get_hash(text):
+    return hashlib.sha256(text.encode('utf-8')).hexdigest()
 
-def save_current(links):
-    with open(STATE_FILE, 'w') as f:
-        for link in links:
-            f.write(link + '\n')
+def send_telegram_message(message):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        'chat_id': TELEGRAM_CHAT_ID,
+        'text': message,
+        'disable_web_page_preview': False
+    }
+    requests.post(url, data=payload)
 
-def main():
-    previous_links = load_previous()
-    current_links = set()
+with open('url_list.txt') as f:
+    urls = f.read().splitlines()
 
-    for url in URLS:
-        latest_link = get_latest_link(url)
-        if latest_link:
-            current_links.add(latest_link)
-            if latest_link not in previous_links:
-                send_telegram(f"🆕 New post found: {latest_link}")
+if not os.path.exists('seen_hashes.txt'):
+    open('seen_hashes.txt', 'w').close()
 
-    save_current(current_links)
+with open('seen_hashes.txt') as f:
+    seen_hashes = set(f.read().splitlines())
 
-if __name__ == "__main__":
-    main()
+new_hashes = set()
+
+for url in urls:
+    latest = fetch_latest_entry_title(url)
+    if not latest:
+        continue
+    content_hash = get_hash(latest)
+    if content_hash not in seen_hashes:
+        send_telegram_message(f"📰 New Post:\n{latest}")
+        new_hashes.add(content_hash)
+
+with open('seen_hashes.txt', 'a') as f:
+    for h in new_hashes:
+        f.write(h + '\n')
