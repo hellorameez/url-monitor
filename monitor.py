@@ -1,66 +1,86 @@
+
 import os
-import feedparser
 import requests
-import json
-from datetime import datetime
+import feedparser
+import openai
+
+openai.api_key = os.environ['OPENAI_API_KEY']
 
 TELEGRAM_BOT_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
 TELEGRAM_CHAT_ID = os.environ['TELEGRAM_CHAT_ID']
 
-STATE_FILE = 'last_seen.json'
-FEED_FILE = 'url_list.txt'
+def detect_category_ai(title, summary):
+    prompt = f"""Title: {title}
+Summary: {summary}
 
-def load_last_seen():
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, 'r') as f:
-            return json.load(f)
-    return {}
+Classify this article into one of the following categories:
+- Apple
+- Android
+- Mobile
+- Tech
+- Other
 
-def save_last_seen(data):
-    with open(STATE_FILE, 'w') as f:
-        json.dump(data, f)
+Return only the category name."""
 
-def send_telegram_message(title, link, source):
-    timestamp = datetime.now().strftime("%d %b %Y • %I:%M %p")
-    message = f"""
-📢 *{source.upper()} Update*  
-📰 *{title}*  
-🔗 [View Full Post]({link})  
-🕒 {timestamp}
-"""
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are an expert in tech news classification."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=10
+        )
+        category = response.choices[0].message['content'].strip()
+        return category
+    except Exception as e:
+        return "Other"
+
+def format_message(title, link, summary):
+    category = detect_category_ai(title, summary)
+    return f"<b>📢 [{category}]</b>\n<b>{title}</b>\n<b>Summary:</b> {summary}\n🔗 {link}"
+
+def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        'chat_id': TELEGRAM_CHAT_ID,
-        'text': message,
-        'parse_mode': 'Markdown',
-        'disable_web_page_preview': True
+    data = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": False
     }
-    requests.post(url, data=payload)
+    requests.post(url, data=data)
 
-def fetch_latest_entries(url, last_seen):
-    feed = feedparser.parse(url)
-    source = url.split('/')[2]
+def get_last_notified_titles():
+    if os.path.exists("notified.txt"):
+        with open("notified.txt", "r", encoding="utf-8") as f:
+            return set(line.strip() for line in f)
+    return set()
 
-    if not feed.entries:
-        return
-
-    latest_title = feed.entries[0].title
-    latest_link = feed.entries[0].link
-
-    if last_seen.get(url) != latest_title:
-        send_telegram_message(latest_title, latest_link, source)
-        last_seen[url] = latest_title
+def update_notified_titles(titles):
+    with open("notified.txt", "a", encoding="utf-8") as f:
+        for title in titles:
+            f.write(title + "\n")
 
 def main():
-    last_seen = load_last_seen()
-
-    with open(FEED_FILE, 'r') as f:
+    with open("url_list.txt", "r") as f:
         urls = [line.strip() for line in f if line.strip()]
 
-    for url in urls:
-        fetch_latest_entries(url, last_seen)
+    already_notified = get_last_notified_titles()
+    new_titles = []
 
-    save_last_seen(last_seen)
+    for url in urls:
+        feed = feedparser.parse(url)
+        if feed.entries:
+            entry = feed.entries[0]
+            title = entry.title.strip()
+            link = entry.link.strip()
+            summary = entry.get("summary", "").strip()[:300]
+            if title not in already_notified:
+                message = format_message(title, link, summary)
+                send_telegram_message(message)
+                new_titles.append(title)
+
+    update_notified_titles(new_titles)
 
 if __name__ == "__main__":
     main()
