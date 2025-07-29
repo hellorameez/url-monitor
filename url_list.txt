@@ -1,0 +1,10 @@
+https://www.gsmarena.com/rss-news.php
+https://gadgets360.com/rss/news
+https://techcrunch.com/feed/
+https://www.androidauthority.com/feed/
+https://www.theverge.com/rss/index.xml
+https://www.wired.com/feed/rss
+https://www.engadget.com/rss.xml
+https://feeds.feedburner.com/ndtvgadgets-latest
+https://beebom.com/feed/
+https://9to5google.com/feed/
