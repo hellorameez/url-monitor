@@ -2,8 +2,8 @@ name: Monitor URLs
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # every 30 minutes
-  workflow_dispatch:        # manual run option
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
 
 jobs:
   monitor:
