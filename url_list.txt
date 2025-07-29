@@ -8,3 +8,16 @@ https://www.engadget.com/rss.xml
 https://feeds.feedburner.com/ndtvgadgets-latest
 https://beebom.com/feed/
 https://9to5google.com/feed/
+https://feeds.arstechnica.com/arstechnica/index
+https://www.xda-developers.com/feed/
+https://www.droid-life.com/feed/
+https://www.macrumors.com/mac/rss.xml
+https://9to5mac.com/feed/
+https://appleinsider.com/rss/news
+https://www.digit.in/rss/news.xml
+https://telecomtalk.info/feed/
+https://www.socialmediatoday.com/rss.xml
+https://techcrunch.com/social/feed/
+http://feeds.mashable.com/Mashable-SocialMedia
+https://www.adweek.com/category/social-pro-daily/feed/
+https://thenextweb.com/socialmedia/feed
